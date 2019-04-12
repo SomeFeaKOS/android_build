@@ -1250,15 +1250,15 @@ endef
 # $(4): staging dir
 # Depmod requires a well-formed kernel version so 0.0 is used as a placeholder.
 define build-image-kernel-modules
-    $(hide) rm -rf $(2)/lib/modules
-    $(hide) mkdir -p $(2)/lib/modules
-    $(hide) cp $(1) $(2)/lib/modules/
-    $(hide) rm -rf $(4)
-    $(hide) mkdir -p $(4)/lib/modules/0.0/$(3)lib/modules
-    $(hide) cp $(1) $(4)/lib/modules/0.0/$(3)lib/modules
-    $(hide) $(DEPMOD) -b $(4) 0.0
-    $(hide) sed -e 's/\(.*modules.*\):/\/\1:/g' -e 's/ \([^ ]*modules[^ ]*\)/ \/\1/g' $(4)/lib/modules/0.0/modules.dep > $(2)/lib/modules/modules.dep
-    $(hide) cp $(4)/lib/modules/0.0/modules.alias $(2)/lib/modules
+    rm -rf $(2)/lib/modules
+    mkdir -p $(2)/lib/modules
+    cp $(1) $(2)/lib/modules/
+    rm -rf $(4)
+    mkdir -p $(4)/lib/modules/0.0/$(3)lib/modules
+    cp $(1) $(4)/lib/modules/0.0/$(3)lib/modules
+    $(DEPMOD) -b $(4) 0.0
+    sed -e 's/\(.*modules.*\):/\/\1:/g' -e 's/ \([^ ]*modules[^ ]*\)/ \/\1/g' $(4)/lib/modules/0.0/modules.dep > $(2)/lib/modules/modules.dep
+    cp $(4)/lib/modules/0.0/modules.alias $(2)/lib/modules
 endef
 
 # -----------------------------------------------------------------
@@ -1442,6 +1442,16 @@ define build-recoveryramdisk
   $(hide) find $(TARGET_RECOVERY_ROOT_OUT) -maxdepth 1 -name 'init*.rc' -type f -not -name "init.recovery.*.rc" | xargs rm -f
   $(hide) cp -f $(recovery_initrc) $(TARGET_RECOVERY_ROOT_OUT)/
   $(hide) cp $(TARGET_ROOT_OUT)/init.recovery.*.rc $(TARGET_RECOVERY_ROOT_OUT)/ || true # Ignore error when the src file doesn't exist.
+  # If charger is not needed in recovery, do the following:
+  #   * Remove the charger service from recovery init.rc.
+  #   # Remove the charger binary and root symlink.
+  $(if $(BOARD_NEEDS_CHARGER_IN_RECOVERY),,\
+    $(hide) cat $(TARGET_RECOVERY_ROOT_OUT)/init.rc | \
+              awk '/^service/ { elide=0; } /^service charger/ { elide=1; } { if (elide==0) { print; } }' > \
+              $(TARGET_RECOVERY_ROOT_OUT)/.init.rc.tmp && \
+            mv $(TARGET_RECOVERY_ROOT_OUT)/.init.rc.tmp $(TARGET_RECOVERY_ROOT_OUT)/init.rc
+    $(hide) rm -f $(TARGET_RECOVERY_ROOT_OUT)/sbin/charger
+    $(hide) rm -f $(TARGET_RECOVERY_ROOT_OUT)/charger)
   $(hide) mkdir -p $(TARGET_RECOVERY_ROOT_OUT)/res
   $(hide) rm -rf $(TARGET_RECOVERY_ROOT_OUT)/res/*
   $(hide) cp -rf $(recovery_resources_common)/* $(TARGET_RECOVERY_ROOT_OUT)/res
